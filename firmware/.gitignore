@@ -1,0 +1,3 @@
+.pio/
+include/secrets.h
+test/test_native/*.exe

@@ -1,0 +1,141 @@
+@font-face {
+  font-family: "NotoSansSC";
+  src: url("../fonts/NotoSansSC-Regular.otf") format("opentype");
+  font-display: swap;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 384px;
+  background: white;
+  color: black;
+  font-family: "NotoSansSC", "Noto Sans CJK SC", "Noto Sans SC", "WenQuanYi Micro Hei", "Microsoft YaHei", "SimHei", "SimSun", sans-serif;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+main {
+  box-sizing: border-box;
+  width: 384px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+}
+
+p,
+ul,
+ol,
+pre {
+  margin: 0 0 8px;
+}
+
+code,
+pre {
+  font-family: Consolas, "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", monospace;
+  font-size: 13px;
+}
+
+.math {
+  font-family: "Segoe Print", "Comic Sans MS", "Cambria Math", "Times New Roman", "NotoSansSC", "Noto Sans CJK SC", "Noto Sans SC", serif;
+  font-size: 14px;
+  line-height: 1.25;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.math-inline {
+  display: inline-block;
+  vertical-align: -0.2em;
+}
+
+.math-display {
+  display: block;
+  margin: 4px 0 8px;
+  text-align: center;
+  font-size: 15px;
+}
+
+.math-fraction {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  margin: 0 2px;
+  text-align: center;
+  vertical-align: middle;
+  line-height: 1.05;
+}
+
+.math-num {
+  border-bottom: 1px solid black;
+  padding: 0 2px 1px;
+}
+
+.math-den {
+  padding: 1px 2px 0;
+}
+
+.math-sqrt {
+  display: inline-flex;
+  align-items: flex-start;
+}
+
+.math-radical {
+  font-size: 1.15em;
+  line-height: 1;
+}
+
+.math-radicand {
+  border-top: 1px solid black;
+  padding: 0 2px;
+}
+
+.math-vector {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 0 1px;
+  vertical-align: middle;
+  line-height: 0.9;
+}
+
+.math-vector-arrow {
+  font-size: 0.74em;
+  line-height: 0.7;
+  height: 0.7em;
+}
+
+.math-overline {
+  border-top: 1px solid black;
+  padding: 0 1px;
+}
+
+.math sup,
+.math sub {
+  font-size: 0.72em;
+  line-height: 0;
+}
+
+.chem-formula {
+  display: inline-block;
+  white-space: nowrap;
+  font-family: "NotoSansSC", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", "SimHei", sans-serif;
+}
+
+.chem-formula sup,
+.chem-formula sub {
+  position: relative;
+  font-size: 0.78em;
+  line-height: 0;
+  vertical-align: baseline;
+}
+
+.chem-formula sup {
+  top: -0.42em;
+}
+
+.chem-formula sub {
+  top: 0.24em;
+}

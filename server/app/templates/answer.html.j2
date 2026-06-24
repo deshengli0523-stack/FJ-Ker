@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <style>{{ css }}</style>
+  {% if katex_css %}<style>{{ katex_css }}</style>{% endif %}
+</head>
+<body>
+  <main>
+    {{ answer_html | safe }}
+  </main>
+  <script>
+    window.__FJKER_MATH_READY = false;
+    window.__FJKER_MATH_DISABLED = false;
+  </script>
+  {% if katex_js %}<script>{{ katex_js }}</script>{% endif %}
+  {% if katex_js and katex_auto_render_js %}
+  <script>{{ katex_auto_render_js }}</script>
+  <script>
+    try {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left: "$$", right: "$$", display: true},
+          {left: "$", right: "$", display: false},
+          {left: "\\(", right: "\\)", display: false},
+          {left: "\\[", right: "\\]", display: true}
+        ],
+        throwOnError: false
+      });
+    } finally {
+      window.__FJKER_MATH_READY = true;
+    }
+  </script>
+  {% else %}
+  <script>
+    window.MathJax = {
+      loader: {load: ["[tex]/mhchem"]},
+      tex: {
+        inlineMath: [["\\(", "\\)"], ["$", "$"]],
+        displayMath: [["\\[", "\\]"], ["$$", "$$"]],
+        packages: {"[+]": ["mhchem"]}
+      },
+      svg: {
+        fontCache: "none"
+      },
+      startup: {
+        pageReady: function () {
+          return MathJax.startup.defaultPageReady()
+            .then(function () { window.__FJKER_MATH_READY = true; })
+            .catch(function () { window.__FJKER_MATH_READY = true; });
+        }
+      }
+    };
+  </script>
+  {% if mathjax_js %}
+  <script>{{ mathjax_js }}</script>
+  {% else %}
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  {% endif %}
+  <script>
+    window.setTimeout(function () {
+      if (!window.MathJax || !window.MathJax.startup) {
+        window.__FJKER_MATH_DISABLED = true;
+      }
+    }, 12000);
+  </script>
+  {% endif %}
+</body>
+</html>
