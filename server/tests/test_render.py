@@ -144,7 +144,7 @@ def test_render_html_fails_fast_when_local_mathjax_missing(monkeypatch):
     assert "cdn.jsdelivr.net" not in html
 
 
-def test_render_with_playwright_waits_for_dom_not_networkidle(monkeypatch):
+def test_render_with_playwright_opens_file_page_not_networkidle(monkeypatch):
     import sys
     import types
 
@@ -153,7 +153,8 @@ def test_render_with_playwright_waits_for_dom_not_networkidle(monkeypatch):
     calls = {}
 
     class FakePage:
-        def set_content(self, html, wait_until=None, timeout=None):
+        def goto(self, url, wait_until=None, timeout=None):
+            calls["url"] = url
             calls["wait_until"] = wait_until
             calls["timeout"] = timeout
 
@@ -211,6 +212,7 @@ def test_render_with_playwright_waits_for_dom_not_networkidle(monkeypatch):
     image = _render_with_playwright("formula: $x^2$")
 
     assert image.size == (PAGE_W, PAGE_H)
+    assert calls["url"].startswith("file:///")
     assert calls["wait_until"] == "domcontentloaded"
     assert calls["timeout"] == 15000
     assert calls["wait_timeout"] == 20000

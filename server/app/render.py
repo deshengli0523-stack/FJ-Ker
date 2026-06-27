@@ -258,11 +258,13 @@ def _render_with_playwright(markdown_text: str) -> Image.Image:
     html_text = _render_html(markdown_text)
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
+            html_path = Path(temp_dir) / "answer.html"
             out_path = Path(temp_dir) / "answer.png"
+            html_path.write_text(html_text, encoding="utf-8")
             with sync_playwright() as p:
                 browser = p.chromium.launch(**_chrome_launch_options())
                 page = browser.new_page(viewport={"width": PAGE_W, "height": PAGE_H})
-                page.set_content(html_text, wait_until="domcontentloaded", timeout=15000)
+                page.goto(html_path.resolve().as_uri(), wait_until="domcontentloaded", timeout=15000)
                 page.wait_for_function(
                     "() => window.__FJKER_MATH_READY === true || window.__FJKER_MATH_DISABLED === true",
                     timeout=20000,
