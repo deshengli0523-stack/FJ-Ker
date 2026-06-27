@@ -188,8 +188,6 @@ def image_to_1bpp_page(image: Image.Image) -> bytes:
 
 def render_answer_pages(markdown_text: str, max_pages: int = 20) -> list[bytes]:
     screenshot = _render_with_playwright(markdown_text)
-    if screenshot is None:
-        screenshot = _render_with_pillow(markdown_text)
     return _slice_and_pack(screenshot, max_pages=max_pages)
 
 
@@ -246,12 +244,13 @@ def _row_ink_count(gray: Image.Image, y: int) -> int:
     return sum(1 for value in row.tobytes() if value <= THRESHOLD)
 
 
-def _render_with_playwright(markdown_text: str) -> Image.Image | None:
+def _render_with_playwright(markdown_text: str) -> Image.Image:
     try:
         from playwright.sync_api import sync_playwright
-    except ImportError:
-        LOGGER.warning("Playwright is not installed; using Pillow fallback renderer.")
-        return None
+    except ImportError as exc:
+        raise RuntimeError(
+            "Playwright is required for LaTeX rendering. Install playwright and Chromium."
+        ) from exc
 
     html_text = _render_html(markdown_text)
     try:
@@ -261,13 +260,15 @@ def _render_with_playwright(markdown_text: str) -> Image.Image | None:
                 browser = p.chromium.launch(headless=True)
                 page = browser.new_page(viewport={"width": PAGE_W, "height": PAGE_H})
                 page.set_content(html_text, wait_until="networkidle")
-                try:
-                    page.wait_for_function(
-                        "() => window.__FJKER_MATH_READY === true || window.__FJKER_MATH_DISABLED === true",
-                        timeout=15000,
-                    )
-                except Exception:
-                    pass
+                page.wait_for_function(
+                    "() => window.__FJKER_MATH_READY === true || window.__FJKER_MATH_DISABLED === true",
+                    timeout=20000,
+                )
+                math_disabled = page.evaluate("() => window.__FJKER_MATH_DISABLED === true")
+                if math_disabled:
+                    math_error = page.evaluate("() => window.__FJKER_MATH_ERROR || ''")
+                    detail = f": {math_error}" if math_error else ""
+                    raise RuntimeError(f"LaTeX engine did not finish rendering{detail}")
                 content_height = page.evaluate(
                     "() => Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)"
                 )
@@ -276,8 +277,8 @@ def _render_with_playwright(markdown_text: str) -> Image.Image | None:
                 browser.close()
             return Image.open(out_path).convert("L")
     except Exception as exc:
-        LOGGER.warning("Playwright rendering failed; using Pillow fallback renderer: %s", exc)
-        return None
+        LOGGER.exception("Playwright/LaTeX rendering failed.")
+        raise RuntimeError(f"Playwright/LaTeX rendering failed: {exc}") from exc
 
 
 def _render_html(markdown_text: str) -> str:
@@ -290,8 +291,7 @@ def _render_html(markdown_text: str) -> str:
     katex_js = _optional_text(templates / "katex" / "katex.min.js")
     katex_auto_render_js = _optional_text(templates / "katex" / "auto-render.min.js")
     mathjax_js = _optional_text(templates / "mathjax" / "tex-svg.js")
-    use_browser_math = bool(katex_js and katex_auto_render_js) or bool(mathjax_js)
-    body = _markdown_to_html(markdown_text, use_browser_math=use_browser_math)
+    body = _markdown_to_html(markdown_text)
     if Environment is None:
         return f"<!doctype html><html><head><style>{css}</style></head><body><main>{body}</main></body></html>"
 
@@ -307,7 +307,6 @@ def _render_html(markdown_text: str) -> str:
         katex_js=katex_js,
         katex_auto_render_js=katex_auto_render_js,
         mathjax_js=mathjax_js,
-        browser_math_enabled=use_browser_math,
     )
 
 
@@ -317,16 +316,9 @@ def _optional_text(path: Path) -> str:
     return ""
 
 
-def _markdown_to_html(markdown_text: str, use_browser_math: bool = True) -> str:
-    markdown_text, math_fragments = _extract_math_fragments(
-        markdown_text,
-        use_browser_math=use_browser_math,
-    )
-    markdown_text = _extract_auto_physics_fragments(
-        markdown_text,
-        math_fragments,
-        use_browser_math=use_browser_math,
-    )
+def _markdown_to_html(markdown_text: str) -> str:
+    markdown_text, math_fragments = _extract_math_fragments(markdown_text)
+    markdown_text = _extract_auto_physics_fragments(markdown_text, math_fragments)
     if markdown_lib is not None:
         body = markdown_lib.markdown(markdown_text, extensions=["extra"])
         body = _render_chemistry_html(body)
@@ -338,7 +330,7 @@ def _markdown_to_html(markdown_text: str, use_browser_math: bool = True) -> str:
     return _restore_math_fragments(body, math_fragments)
 
 
-def _extract_math_fragments(markdown_text: str, use_browser_math: bool = True) -> tuple[str, list[str]]:
+def _extract_math_fragments(markdown_text: str) -> tuple[str, list[str]]:
     fragments: list[str] = []
     out: list[str] = []
     i = 0
@@ -351,7 +343,6 @@ def _extract_math_fragments(markdown_text: str, use_browser_math: bool = True) -
                         fragments,
                         markdown_text[i + 2 : end],
                         display=True,
-                        use_browser_math=use_browser_math,
                     )
                 )
                 i = end + 2
@@ -364,7 +355,6 @@ def _extract_math_fragments(markdown_text: str, use_browser_math: bool = True) -
                         fragments,
                         markdown_text[i + 2 : end],
                         display=True,
-                        use_browser_math=use_browser_math,
                     )
                 )
                 i = end + 2
@@ -377,7 +367,6 @@ def _extract_math_fragments(markdown_text: str, use_browser_math: bool = True) -
                         fragments,
                         markdown_text[i + 2 : end],
                         display=False,
-                        use_browser_math=use_browser_math,
                     )
                 )
                 i = end + 2
@@ -390,7 +379,6 @@ def _extract_math_fragments(markdown_text: str, use_browser_math: bool = True) -
                         fragments,
                         markdown_text[i + 1 : end],
                         display=False,
-                        use_browser_math=use_browser_math,
                     )
                 )
                 i = end + 1
@@ -414,11 +402,7 @@ def _find_inline_math_end(text: str, start: int) -> int:
     return -1
 
 
-def _extract_auto_physics_fragments(
-    markdown_text: str,
-    fragments: list[str],
-    use_browser_math: bool = True,
-) -> str:
+def _extract_auto_physics_fragments(markdown_text: str, fragments: list[str]) -> str:
     out: list[str] = []
     i = 0
     while i < len(markdown_text):
@@ -433,7 +417,6 @@ def _extract_auto_physics_fragments(
                         fragments,
                         _normalize_unicode_math(candidate),
                         display=False,
-                        use_browser_math=use_browser_math,
                     )
                 )
                 i = end
@@ -463,17 +446,9 @@ def _normalize_unicode_math(source: str) -> str:
     return "".join(_UNICODE_MATH_TO_LATEX.get(ch, ch) for ch in source.strip())
 
 
-def _math_placeholder(
-    fragments: list[str],
-    latex: str,
-    display: bool,
-    use_browser_math: bool = True,
-) -> str:
+def _math_placeholder(fragments: list[str], latex: str, display: bool) -> str:
     index = len(fragments)
-    if use_browser_math:
-        fragments.append(_math_engine_fragment(latex, display=display))
-    else:
-        fragments.append(_render_latex_fragment(latex, display=display))
+    fragments.append(_math_engine_fragment(latex, display=display))
     return f"@@{_MATH_TOKEN}{index}@@"
 
 

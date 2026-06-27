@@ -4,7 +4,6 @@ from app.render import (
     PAGE_W,
     ROW_STRIDE,
     _font_candidates,
-    _markdown_to_html,
     _render_html,
     _render_with_pillow,
     _slice_and_pack,
@@ -42,7 +41,13 @@ def test_pack_1bpp_uses_landscape_row_stride():
     assert sum(1 for byte in packed if byte) == 1
 
 
-def test_render_answer_pages_outputs_8064_byte_pages():
+def test_render_answer_pages_outputs_8064_byte_pages(monkeypatch):
+    from PIL import Image
+
+    monkeypatch.setattr(
+        "app.render._render_with_playwright",
+        lambda markdown_text: Image.new("L", (PAGE_W, PAGE_H), 255),
+    )
     markdown = """
 这是一个固定答案。
 
@@ -55,6 +60,20 @@ def test_render_answer_pages_outputs_8064_byte_pages():
 
     assert len(pages) >= 1
     assert all(len(page) == PAGE_BYTES for page in pages)
+
+
+def test_render_answer_pages_propagates_playwright_errors(monkeypatch):
+    def fail_render(markdown_text: str):
+        raise RuntimeError("latex failed")
+
+    monkeypatch.setattr("app.render._render_with_playwright", fail_render)
+
+    try:
+        render_answer_pages("formula: $x^2$")
+    except RuntimeError as exc:
+        assert "latex failed" in str(exc)
+    else:
+        assert False, "render_answer_pages should not fall back when LaTeX rendering fails"
 
 
 def _packed_row_has_black(page: bytes, y: int) -> bool:
@@ -76,18 +95,10 @@ def test_slice_and_pack_does_not_cut_visible_rows_at_page_break():
     assert any(_packed_row_has_black(pages[1], y) for y in range(0, 16))
 
 
-def test_render_html_uses_local_math_when_browser_math_assets_are_missing():
+def test_render_html_delegates_latex_to_browser_math_engine():
     html = _render_html("分数：$\\frac{1}{2}$\n\n积分：$$\\int_0^1 x^2 dx$$")
 
-    assert '<span class="math-fraction">' in html
-    assert "\\(\\frac{1}{2}\\)" not in html
-    assert "cdn.jsdelivr.net" not in html
-    assert "window.__FJKER_MATH_DISABLED = true" in html
-
-
-def test_markdown_to_html_can_delegate_latex_to_browser_math_engine():
-    html = _markdown_to_html("fraction: $\\frac{1}{2}$\n\nintegral: $$\\int_0^1 x^2 dx$$")
-
+    assert "window.MathJax" in html
     assert "\\(\\frac{1}{2}\\)" in html
     assert "\\[\\int_0^1 x^2 dx\\]" in html
     assert '<span class="math-fraction">' not in html
@@ -96,26 +107,28 @@ def test_markdown_to_html_can_delegate_latex_to_browser_math_engine():
 def test_render_html_auto_formats_common_physics_formulas():
     html = _render_html("速度：v_0=at，能量：E=mc^2，位移：s=v_0t+\\frac{1}{2}at^2。")
 
-    assert "<sub>0</sub>" in html
-    assert "<sup>2</sup>" in html
-    assert '<span class="math-fraction">' in html
+    assert "\\(v_0=at\\)" in html
+    assert "\\(E=mc^2\\)" in html
+    assert "\\(s=v_0t+\\frac{1}{2}at^2\\)" in html
+    assert '<span class="math-fraction">' not in html
 
 
 def test_render_html_auto_formats_scientific_notation_with_unicode_symbols():
     html = _render_html("原子数密度：3 × 6.022 × 10^23 / 55.9 × 10^-3 ≈ 8.47 × 10^28 m^-3。磁矩 μ：")
 
-    assert "\\times" not in html
-    assert "\\mu" not in html
-    assert "<sup>23</sup>" in html
-    assert "<sup>-3</sup>" in html
-    assert "<sup>28</sup>" in html
+    assert "\\(3 \\times 6.022 \\times 10^23 / 55.9 \\times 10^-3 \\approx 8.47 \\times 10^28 m^-3\\)" in html
+    assert "\\(\\mu\\)" in html
+    assert "×" not in html
+    assert "≈" not in html
+    assert "μ" not in html
     assert '<span class="math-fraction">' not in html
 
 
 def test_render_html_formats_vector_physics_commands():
     html = _render_html("受力：$\\vec{F}=m\\vec{a}$")
 
-    assert '<span class="math-vector">' in html
+    assert "\\(\\vec{F}=m\\vec{a}\\)" in html
+    assert '<span class="math-vector">' not in html
     assert "vecF" not in html
 
 
@@ -155,12 +168,10 @@ def test_render_html_normalizes_ion_charge_symbols():
         "$\\mathrm{Na}^+$、$\\text{Cl}^-$、$\\ce{Ca^{2+}}$、$\\ce{Mg^2+}$ 也可能存在。"
     )
 
-    assert "\\(\\mathrm{Na}^+\\)" not in html
-    assert "\\(\\text{Cl}^-\\)" not in html
-    assert "\\(\\ce{Ca^{2+}}\\)" not in html
-    assert "\\(\\ce{Mg^2+}\\)" not in html
-    assert "Ca<sup>2+</sup>" in html
-    assert "Mg<sup>2+</sup>" in html
+    assert "\\(\\mathrm{Na}^+\\)" in html
+    assert "\\(\\text{Cl}^-\\)" in html
+    assert "\\(\\ce{Ca^{2+}}\\)" in html
+    assert "\\(\\ce{Mg^2+}\\)" in html
     assert "chem-formula" in html
     assert ".chem-formula sup" in html
     assert "K<sup>+</sup>" in html
