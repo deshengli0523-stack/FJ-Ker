@@ -12,7 +12,11 @@ class Settings(BaseSettings):
     server_port: int = Field(default=8080, alias="SERVER_PORT")
     max_pages: int = Field(default=20, alias="MAX_PAGES")
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 @lru_cache
