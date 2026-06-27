@@ -7,7 +7,15 @@ static int failures = 0;
 
 static void expect_state(app::AppState actual, app::AppState expected, const char* message) {
   if (actual != expected) {
-    std::cerr << "失败: " << message << "\n";
+    std::cerr << "fail: " << message << "\n";
+    ++failures;
+  }
+}
+
+static void expect_int(int actual, int expected, const char* message) {
+  if (actual != expected) {
+    std::cerr << "fail: " << message << " expected " << expected << " actual "
+              << actual << "\n";
     ++failures;
   }
 }
@@ -24,43 +32,39 @@ static app::Context make_context(app::AppState state) {
 static void test_boot_timeout_enters_idle() {
   app::Context ctx = make_context(app::AppState::Boot);
   app::handleTimeout(ctx, app::TimeoutKind::BootSplash);
-  expect_state(ctx.state, app::AppState::Idle, "启动画面超时后进入空闲状态");
-}
-
-static void test_low_battery_lockout_cannot_enter_preview() {
-  app::Context ctx = make_context(app::AppState::Boot);
-  ctx.lowBattery = true;
-  app::handleTimeout(ctx, app::TimeoutKind::BootSplash);
-  expect_state(ctx.state, app::AppState::LowBattery, "低电量启动后进入锁定状态");
-
-  app::handleButton(ctx, {buttons::Button::Cancel, buttons::EventKind::Down});
-  expect_state(ctx.state, app::AppState::LowBattery, "取消键不会退出低电量锁定状态");
-
-  app::handleButton(ctx, {buttons::Button::Capture, buttons::EventKind::Down});
-  expect_state(ctx.state, app::AppState::LowBattery, "拍摄键不会退出低电量锁定状态");
+  expect_state(ctx.state, app::AppState::Idle, "boot timeout enters idle");
 }
 
 static void test_cancel_rules() {
   app::Context waiting = make_context(app::AppState::WaitingForAnswer);
-  app::TransitionResult result = app::handleButton(waiting, {buttons::Button::Cancel, buttons::EventKind::Down});
-  expect_state(waiting.state, app::AppState::CameraPreview, "等待时取消会返回预览");
+  app::TransitionResult result =
+      app::handleButton(waiting, {buttons::Button::Cancel, buttons::EventKind::Down});
+  expect_state(waiting.state, app::AppState::Idle, "waiting cancel returns idle");
   if (!result.shouldCancelJob) {
-    std::cerr << "失败: 等待时取消会请求取消任务\n";
+    std::cerr << "fail: waiting cancel requests job cancellation\n";
+    ++failures;
+  }
+
+  app::Context uploading = make_context(app::AppState::Uploading);
+  result = app::handleButton(uploading, {buttons::Button::Cancel, buttons::EventKind::Down});
+  expect_state(uploading.state, app::AppState::Idle, "uploading cancel returns idle");
+  if (!result.shouldCancelJob) {
+    std::cerr << "fail: uploading cancel requests job cancellation\n";
     ++failures;
   }
 
   app::Context idle = make_context(app::AppState::Idle);
   app::handleButton(idle, {buttons::Button::Cancel, buttons::EventKind::Down});
-  expect_state(idle.state, app::AppState::Idle, "空闲时取消不执行操作");
+  expect_state(idle.state, app::AppState::Idle, "idle cancel is ignored");
 }
 
 static void test_answer_paging_stops_at_ends() {
   app::Context ctx = make_context(app::AppState::AnswerView);
   ctx.pageIndex = 0;
   app::handleButton(ctx, {buttons::Button::PageUp, buttons::EventKind::Down});
-  expect_state(ctx.state, app::AppState::AnswerView, "PageUp 后仍停留在答案视图");
+  expect_state(ctx.state, app::AppState::AnswerView, "PageUp stays in answer view");
   if (ctx.pageIndex != 0) {
-    std::cerr << "失败: 第一页按 PageUp 不会回绕\n";
+    std::cerr << "fail: first page PageUp does not wrap\n";
     ++failures;
   }
 
@@ -68,20 +72,30 @@ static void test_answer_paging_stops_at_ends() {
   app::handleButton(ctx, {buttons::Button::PageDown, buttons::EventKind::Repeat});
   app::handleButton(ctx, {buttons::Button::PageDown, buttons::EventKind::Repeat});
   if (ctx.pageIndex != 2) {
-    std::cerr << "失败: PageDown 会停在最后一页，实际为 " << ctx.pageIndex << "\n";
+    std::cerr << "fail: PageDown stops at last page, actual " << ctx.pageIndex << "\n";
     ++failures;
   }
 }
 
+static void test_set_ready_clamps_page_count() {
+  app::Context ctx = make_context(app::AppState::WaitingForAnswer);
+  ctx.pageIndex = 4;
+
+  app::setReady(ctx, 25);
+
+  expect_int(ctx.pageCount, 20, "setReady clamps pageCount");
+  expect_int(ctx.pageIndex, 0, "setReady resets pageIndex");
+}
+
 int main() {
   test_boot_timeout_enters_idle();
-  test_low_battery_lockout_cannot_enter_preview();
   test_cancel_rules();
   test_answer_paging_stops_at_ends();
+  test_set_ready_clamps_page_count();
   if (failures != 0) {
-    std::cerr << failures << " 个应用状态测试失败\n";
+    std::cerr << failures << " app state tests failed\n";
     return 1;
   }
-  std::cout << "应用状态测试通过\n";
+  std::cout << "app state tests passed\n";
   return 0;
 }

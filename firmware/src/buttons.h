@@ -13,4 +13,5 @@ struct ButtonEvent {
 
 void init();
 bool poll(ButtonEvent& event);
+void logRawLevels();
 }  // 命名空间 buttons

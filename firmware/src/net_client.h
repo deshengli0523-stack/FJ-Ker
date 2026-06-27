@@ -13,7 +13,8 @@ struct JobStatus {
 };
 
 bool ensureWifi();
-bool postJobJpeg(const uint8_t* jpeg, size_t len, std::string& jobId);
+bool postJobRawRgb565(const uint8_t* data, size_t len, int width, int height,
+                      std::string& jobId);
 bool getJobStatus(const char* jobId, JobStatus& status);
 bool getPage(const char* jobId, int pageIndex, uint8_t* dst, size_t len);
 bool getPageCount(const char* jobId, int& pageCount);

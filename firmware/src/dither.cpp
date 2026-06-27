@@ -18,6 +18,29 @@ void setPackedPixel(uint8_t* dst, int dstWidth, int x, int y, bool ink) {
   }
 }
 
+void thresholdTo1bpp(const uint8_t* gray, int srcWidth, int srcHeight,
+                     uint8_t* dst, int dstWidth, int dstHeight,
+                     int dstX, int dstY, uint8_t threshold) {
+  if (!gray || !dst || srcWidth <= 0 || srcHeight <= 0 || dstWidth <= 0 || dstHeight <= 0) {
+    return;
+  }
+
+  for (int y = 0; y < srcHeight; ++y) {
+    const int outY = dstY + y;
+    if (outY < 0 || outY >= dstHeight) {
+      continue;
+    }
+    for (int x = 0; x < srcWidth; ++x) {
+      const int outX = dstX + x;
+      if (outX < 0 || outX >= dstWidth) {
+        continue;
+      }
+      const bool ink = gray[static_cast<size_t>(y) * srcWidth + x] <= threshold;
+      setPackedPixel(dst, dstWidth, outX, outY, ink);
+    }
+  }
+}
+
 void floydSteinbergTo1bpp(const uint8_t* gray, int srcWidth, int srcHeight,
                           uint8_t* dst, int dstWidth, int dstHeight,
                           int dstX, int dstY) {

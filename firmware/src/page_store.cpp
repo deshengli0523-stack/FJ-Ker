@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "diagnostics.h"
+
 #ifdef ARDUINO
 #include <Arduino.h>
 #include "display.h"
@@ -26,21 +28,44 @@ uint8_t* allocatePage() {
 }
 }  // 命名空间
 
-void reset(int pageCount) {
+int clampPageCount(int pageCount) {
+  return pageCount < 0 ? 0 : (pageCount > MAX_PAGES ? MAX_PAGES : pageCount);
+}
+
+void clear() {
+  bool hadState = g_count != 0;
   for (int i = 0; i < MAX_PAGES; ++i) {
+    hadState = hadState || g_pages[i] != nullptr || g_ready[i];
+    std::free(g_pages[i]);
+    g_pages[i] = nullptr;
     g_ready[i] = false;
   }
-  g_count = pageCount < 0 ? 0 : (pageCount > MAX_PAGES ? MAX_PAGES : pageCount);
+  if (hadState) {
+    diagnostics::event("pages", "clear");
+  }
+  g_count = 0;
+}
+
+void reset(int pageCount) {
+  clear();
+  g_count = clampPageCount(pageCount);
+  diagnostics::value("pages", "requested_count", pageCount);
+  diagnostics::value("pages", "active_count", g_count);
 }
 
 uint8_t* ensurePageBuffer(int index) {
   if (index < 0 || index >= g_count || index >= MAX_PAGES) {
+    diagnostics::value("pages", "invalid_index", index);
+    diagnostics::value("pages", "active_count", g_count);
     return nullptr;
   }
   if (!g_pages[index]) {
     g_pages[index] = allocatePage();
     if (g_pages[index]) {
       std::memset(g_pages[index], 0, display::PAGE_BYTES);
+      diagnostics::value("pages", "alloc_index", index);
+    } else {
+      diagnostics::value("pages", "alloc_failed_index", index);
     }
   }
   return g_pages[index];
@@ -49,6 +74,7 @@ uint8_t* ensurePageBuffer(int index) {
 void markReady(int index) {
   if (index >= 0 && index < g_count && index < MAX_PAGES) {
     g_ready[index] = true;
+    diagnostics::value("pages", "ready_index", index);
   }
 }
 
@@ -60,6 +86,9 @@ const uint8_t* get(int index) {
   const unsigned long start = millis();
   while (!g_ready[index] && millis() - start < 2000) {
     delay(10);
+  }
+  if (!g_ready[index]) {
+    diagnostics::value("pages", "wait_timeout_index", index);
   }
 #endif
   return g_ready[index] ? g_pages[index] : nullptr;

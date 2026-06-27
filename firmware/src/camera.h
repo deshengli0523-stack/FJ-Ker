@@ -10,10 +10,11 @@ struct Frame {
   int width = 0;
   int height = 0;
   void* opaque = nullptr;
+  bool ownsData = false;
 };
 
 bool initPreview();
 bool grabPreview(Frame& frame);
-bool captureJpeg(Frame& frame);
+bool captureRaw(Frame& frame);
 void release(Frame& frame);
 }  // 命名空间 camera

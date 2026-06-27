@@ -13,8 +13,7 @@ enum class AppState : uint8_t {
   Uploading,
   WaitingForAnswer,
   AnswerView,
-  Error,
-  LowBattery
+  Error
 };
 
 enum class TimeoutKind : uint8_t { BootSplash, Poll };
@@ -24,11 +23,10 @@ struct Context {
   int pageIndex = 0;
   int pageCount = 0;
   std::string activeJobId;
-  bool lowBattery = false;
 };
 
 struct TransitionResult {
-  bool shouldCaptureJpeg = false;
+  bool shouldCaptureRaw = false;
   bool shouldCancelJob = false;
   bool shouldFetchPage = false;
 };

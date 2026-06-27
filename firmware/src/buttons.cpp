@@ -2,6 +2,7 @@
 
 #ifdef ARDUINO
 #include <Arduino.h>
+#include "diagnostics.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -69,6 +70,16 @@ void init() {
     pinMode(slot.pin, INPUT_PULLUP);
   }
   xTaskCreatePinnedToCore(task, "buttons", 3072, nullptr, 2, nullptr, 1);
+#endif
+}
+
+void logRawLevels() {
+#ifdef ARDUINO
+  diagnostics::value("button_raw", "capture", digitalRead(pins::BTN_CAPTURE));
+  diagnostics::value("button_raw", "confirm", digitalRead(pins::BTN_CONFIRM));
+  diagnostics::value("button_raw", "cancel", digitalRead(pins::BTN_CANCEL));
+  diagnostics::value("button_raw", "page_up", digitalRead(pins::BTN_PAGE_UP));
+  diagnostics::value("button_raw", "page_down", digitalRead(pins::BTN_PAGE_DOWN));
 #endif
 }
 
