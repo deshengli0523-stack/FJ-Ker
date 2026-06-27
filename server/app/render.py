@@ -323,6 +323,7 @@ def _chrome_launch_options() -> dict[str, object]:
     options: dict[str, object] = {
         "headless": True,
         "args": _chrome_args(),
+        "env": _chrome_env(),
     }
     executable_path = os.environ.get("FJKER_CHROME_EXECUTABLE", "").strip()
     if not executable_path:
@@ -351,10 +352,41 @@ def _find_google_chrome_stable() -> str:
 
 
 def _chrome_args() -> list[str]:
-    args = ["--disable-dev-shm-usage"]
+    crash_dir = _chrome_runtime_root() / "crashpad"
+    crash_dir.mkdir(parents=True, exist_ok=True)
+    args = [
+        "--disable-dev-shm-usage",
+        "--disable-crash-reporter",
+        "--disable-crashpad",
+        f"--crash-dumps-dir={crash_dir}",
+    ]
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         args.append("--no-sandbox")
     return args
+
+
+def _chrome_env() -> dict[str, str]:
+    root = _chrome_runtime_root()
+    home = root / "home"
+    config = root / "config"
+    cache = root / "cache"
+    data = root / "data"
+    for path in (home, config, cache, data / "applications"):
+        path.mkdir(parents=True, exist_ok=True)
+
+    env = {key: str(value) for key, value in os.environ.items()}
+    env["HOME"] = str(home)
+    env["XDG_CONFIG_HOME"] = str(config)
+    env["XDG_CACHE_HOME"] = str(cache)
+    env["XDG_DATA_HOME"] = str(data)
+    return env
+
+
+def _chrome_runtime_root() -> Path:
+    configured = os.environ.get("FJKER_CHROME_RUNTIME_DIR", "").strip()
+    if configured:
+        return Path(configured)
+    return Path(tempfile.gettempdir()) / "fjker-chrome"
 
 
 def _markdown_to_html(markdown_text: str) -> str:

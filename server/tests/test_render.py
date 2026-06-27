@@ -115,6 +115,21 @@ def test_chrome_launch_options_use_google_chrome_executable(monkeypatch):
     assert "channel" not in options
 
 
+def test_chrome_launch_options_use_writable_runtime_dirs(tmp_path, monkeypatch):
+    monkeypatch.setenv("FJKER_CHROME_RUNTIME_DIR", str(tmp_path))
+
+    options = _chrome_launch_options()
+
+    env = options["env"]
+    assert env["HOME"] == str(tmp_path / "home")
+    assert env["XDG_CONFIG_HOME"] == str(tmp_path / "config")
+    assert env["XDG_CACHE_HOME"] == str(tmp_path / "cache")
+    assert env["XDG_DATA_HOME"] == str(tmp_path / "data")
+    assert (tmp_path / "data" / "applications").is_dir()
+    assert (tmp_path / "crashpad").is_dir()
+    assert f"--crash-dumps-dir={tmp_path / 'crashpad'}" in options["args"]
+
+
 def test_render_html_auto_formats_common_physics_formulas():
     html = _render_html("速度：v_0=at，能量：E=mc^2，位移：s=v_0t+\\frac{1}{2}at^2。")
 
