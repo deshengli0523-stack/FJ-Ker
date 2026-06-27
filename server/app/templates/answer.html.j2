@@ -34,11 +34,9 @@
   {% else %}
   <script>
     window.MathJax = {
-      loader: {load: ["[tex]/mhchem"]},
       tex: {
         inlineMath: [["\\(", "\\)"], ["$", "$"]],
-        displayMath: [["\\[", "\\]"], ["$$", "$$"]],
-        packages: {"[+]": ["mhchem"]}
+        displayMath: [["\\[", "\\]"], ["$$", "$$"]]
       },
       svg: {
         fontCache: "none"
@@ -55,10 +53,13 @@
       }
     };
   </script>
-  {% if mathjax_js %}
-  <script>{{ mathjax_js | safe }}</script>
+  {% if mathjax_src %}
+  <script async src="{{ mathjax_src }}" onerror="window.__FJKER_MATH_ERROR = 'Local MathJax failed to load'; window.__FJKER_MATH_DISABLED = true;"></script>
   {% else %}
-  <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" onerror="window.__FJKER_MATH_ERROR = 'MathJax CDN failed to load'; window.__FJKER_MATH_DISABLED = true;"></script>
+  <script>
+    window.__FJKER_MATH_ERROR = "Local MathJax asset missing";
+    window.__FJKER_MATH_DISABLED = true;
+  </script>
   {% endif %}
   <script>
     window.setTimeout(function () {

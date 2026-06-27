@@ -293,7 +293,7 @@ def _render_html(markdown_text: str) -> str:
     katex_css = _optional_text(templates / "katex" / "katex.min.css")
     katex_js = _optional_text(templates / "katex" / "katex.min.js")
     katex_auto_render_js = _optional_text(templates / "katex" / "auto-render.min.js")
-    mathjax_js = _optional_text(templates / "mathjax" / "tex-svg.js")
+    mathjax_src = _optional_asset_uri(templates / "mathjax" / "tex-svg.js")
     body = _markdown_to_html(markdown_text)
     if Environment is None:
         return f"<!doctype html><html><head><style>{css}</style></head><body><main>{body}</main></body></html>"
@@ -309,13 +309,19 @@ def _render_html(markdown_text: str) -> str:
         katex_css=katex_css,
         katex_js=katex_js,
         katex_auto_render_js=katex_auto_render_js,
-        mathjax_js=mathjax_js,
+        mathjax_src=mathjax_src,
     )
 
 
 def _optional_text(path: Path) -> str:
     if path.exists():
         return path.read_text(encoding="utf-8")
+    return ""
+
+
+def _optional_asset_uri(path: Path) -> str:
+    if path.exists():
+        return path.resolve().as_uri()
     return ""
 
 
