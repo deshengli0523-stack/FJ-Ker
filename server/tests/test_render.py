@@ -3,6 +3,7 @@ from app.render import (
     PAGE_H,
     PAGE_W,
     ROW_STRIDE,
+    _chrome_launch_options,
     _font_candidates,
     _render_html,
     _render_with_pillow,
@@ -102,6 +103,16 @@ def test_render_html_delegates_latex_to_browser_math_engine():
     assert "\\(\\frac{1}{2}\\)" in html
     assert "\\[\\int_0^1 x^2 dx\\]" in html
     assert '<span class="math-fraction">' not in html
+
+
+def test_chrome_launch_options_use_google_chrome_executable(monkeypatch):
+    monkeypatch.setenv("FJKER_CHROME_EXECUTABLE", "/usr/bin/google-chrome-stable")
+
+    options = _chrome_launch_options()
+
+    assert options["headless"] is True
+    assert options["executable_path"] == "/usr/bin/google-chrome-stable"
+    assert "channel" not in options
 
 
 def test_render_html_auto_formats_common_physics_formulas():

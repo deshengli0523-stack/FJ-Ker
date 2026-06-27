@@ -1,7 +1,9 @@
 import html
 import logging
 import math
+import os
 import re
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Iterable
@@ -27,6 +29,7 @@ ROW_STRIDE = 48
 PAGE_BYTES = PAGE_H * ROW_STRIDE
 THRESHOLD = 128
 LOGGER = logging.getLogger(__name__)
+DEFAULT_CHROME_CHANNEL = "chrome"
 _MATH_TOKEN = "FJKERMATH"
 _PAGE_CUT_SEARCH_ROWS = 48
 _FORMULA_CHARS = set(
@@ -257,7 +260,7 @@ def _render_with_playwright(markdown_text: str) -> Image.Image:
         with tempfile.TemporaryDirectory() as temp_dir:
             out_path = Path(temp_dir) / "answer.png"
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
+                browser = p.chromium.launch(**_chrome_launch_options())
                 page = browser.new_page(viewport={"width": PAGE_W, "height": PAGE_H})
                 page.set_content(html_text, wait_until="networkidle")
                 page.wait_for_function(
@@ -314,6 +317,44 @@ def _optional_text(path: Path) -> str:
     if path.exists():
         return path.read_text(encoding="utf-8")
     return ""
+
+
+def _chrome_launch_options() -> dict[str, object]:
+    options: dict[str, object] = {
+        "headless": True,
+        "args": _chrome_args(),
+    }
+    executable_path = os.environ.get("FJKER_CHROME_EXECUTABLE", "").strip()
+    if not executable_path:
+        executable_path = _find_google_chrome_stable()
+
+    if executable_path:
+        options["executable_path"] = executable_path
+    else:
+        options["channel"] = (
+            os.environ.get("FJKER_CHROME_CHANNEL", DEFAULT_CHROME_CHANNEL).strip()
+            or DEFAULT_CHROME_CHANNEL
+        )
+    return options
+
+
+def _find_google_chrome_stable() -> str:
+    for candidate in (
+        shutil.which("google-chrome-stable"),
+        shutil.which("google-chrome"),
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/google-chrome",
+    ):
+        if candidate and Path(candidate).exists():
+            return candidate
+    return ""
+
+
+def _chrome_args() -> list[str]:
+    args = ["--disable-dev-shm-usage"]
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        args.append("--no-sandbox")
+    return args
 
 
 def _markdown_to_html(markdown_text: str) -> str:

@@ -229,8 +229,16 @@ if [[ "$SKIP_PLAYWRIGHT_BROWSER_INSTALL" != "1" ]]; then
     echo "WARNING: Playwright OS dependency installation failed." >&2
   fi
   if ! PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_BROWSERS_PATH" "$VENV_PYTHON" -m playwright install chromium; then
-    echo "WARNING: Playwright Chromium install failed. Pillow fallback rendering remains available." >&2
+    echo "WARNING: Playwright Chromium install failed. The renderer will use system Google Chrome Stable if available." >&2
   fi
+fi
+
+CHROME_EXECUTABLE="$(command -v google-chrome-stable || command -v google-chrome || true)"
+if [[ -z "$CHROME_EXECUTABLE" && -x /usr/bin/google-chrome-stable ]]; then
+  CHROME_EXECUTABLE="/usr/bin/google-chrome-stable"
+fi
+if [[ -z "$CHROME_EXECUTABLE" ]]; then
+  echo "WARNING: Google Chrome Stable was not found. Install google-chrome-stable or set FJKER_CHROME_EXECUTABLE." >&2
 fi
 
 step "Caching MathJax for offline PC-side formula rendering"
@@ -266,6 +274,7 @@ Group=${SERVICE_USER}
 WorkingDirectory=${SERVER_ROOT}
 EnvironmentFile=${ENV_PATH}
 Environment=PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH}
+Environment=FJKER_CHROME_EXECUTABLE=${CHROME_EXECUTABLE}
 ExecStart=${VENV_PYTHON} -m uvicorn app.main:app --host ${BIND_HOST} --port ${PORT}
 Restart=always
 RestartSec=3
