@@ -262,7 +262,7 @@ def _render_with_playwright(markdown_text: str) -> Image.Image:
             with sync_playwright() as p:
                 browser = p.chromium.launch(**_chrome_launch_options())
                 page = browser.new_page(viewport={"width": PAGE_W, "height": PAGE_H})
-                page.set_content(html_text, wait_until="networkidle")
+                page.set_content(html_text, wait_until="domcontentloaded", timeout=15000)
                 page.wait_for_function(
                     "() => window.__FJKER_MATH_READY === true || window.__FJKER_MATH_DISABLED === true",
                     timeout=20000,
@@ -270,7 +270,7 @@ def _render_with_playwright(markdown_text: str) -> Image.Image:
                 math_disabled = page.evaluate("() => window.__FJKER_MATH_DISABLED === true")
                 if math_disabled:
                     math_error = page.evaluate("() => window.__FJKER_MATH_ERROR || ''")
-                    detail = f": {math_error}" if math_error else ""
+                    detail = f": {math_error}" if math_error else ": MathJax did not load before timeout"
                     raise RuntimeError(f"LaTeX engine did not finish rendering{detail}")
                 content_height = page.evaluate(
                     "() => Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)"

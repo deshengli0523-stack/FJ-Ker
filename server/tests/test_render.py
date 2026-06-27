@@ -6,6 +6,7 @@ from app.render import (
     _chrome_launch_options,
     _font_candidates,
     _render_html,
+    _render_with_playwright,
     _render_with_pillow,
     _slice_and_pack,
     pack_1bpp,
@@ -103,6 +104,79 @@ def test_render_html_delegates_latex_to_browser_math_engine():
     assert "\\(\\frac{1}{2}\\)" in html
     assert "\\[\\int_0^1 x^2 dx\\]" in html
     assert '<span class="math-fraction">' not in html
+
+
+def test_render_with_playwright_waits_for_dom_not_networkidle(monkeypatch):
+    import sys
+    import types
+
+    from PIL import Image
+
+    calls = {}
+
+    class FakePage:
+        def set_content(self, html, wait_until=None, timeout=None):
+            calls["wait_until"] = wait_until
+            calls["timeout"] = timeout
+
+        def wait_for_function(self, expression, timeout=None):
+            calls["wait_for_function"] = expression
+            calls["wait_timeout"] = timeout
+
+        def evaluate(self, expression):
+            if "__FJKER_MATH_DISABLED" in expression:
+                return False
+            if "scrollHeight" in expression:
+                return PAGE_H
+            return ""
+
+        def set_viewport_size(self, size):
+            calls["viewport"] = size
+
+        def screenshot(self, path, full_page=False):
+            calls["full_page"] = full_page
+            Image.new("L", (PAGE_W, PAGE_H), 255).save(path)
+
+    class FakeBrowser:
+        def new_page(self, viewport):
+            calls["initial_viewport"] = viewport
+            return FakePage()
+
+        def close(self):
+            calls["closed"] = True
+
+    class FakeChromium:
+        def launch(self, **options):
+            calls["launch_options"] = options
+            return FakeBrowser()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+    class FakeContext:
+        def __enter__(self):
+            return FakePlaywright()
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_sync_playwright():
+        return FakeContext()
+
+    monkeypatch.setitem(sys.modules, "playwright", types.SimpleNamespace())
+    monkeypatch.setitem(
+        sys.modules,
+        "playwright.sync_api",
+        types.SimpleNamespace(sync_playwright=fake_sync_playwright),
+    )
+
+    image = _render_with_playwright("formula: $x^2$")
+
+    assert image.size == (PAGE_W, PAGE_H)
+    assert calls["wait_until"] == "domcontentloaded"
+    assert calls["timeout"] == 15000
+    assert calls["wait_timeout"] == 20000
+    assert calls["closed"] is True
 
 
 def test_chrome_launch_options_use_google_chrome_executable(monkeypatch):
