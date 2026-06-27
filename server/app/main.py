@@ -12,7 +12,7 @@ from .settings import get_settings
 
 VERSION = "0.1.0"
 
-app = FastAPI(title="FJ-ker PC 服务端", version=VERSION)
+app = FastAPI(title="FJ-ker PC Server", version=VERSION)
 _job_queue = None
 _worker_task = None
 
@@ -25,8 +25,7 @@ def require_api_token(
     if not api_token:
         return
     if x_fj_ker_token is None or not secrets.compare_digest(x_fj_ker_token, api_token):
-        raise HTTPException(status_code=401, detail="缺少或无效的设备访问 Token")
-
+        raise HTTPException(status_code=401, detail="Missing or invalid device token")
 
 
 async def _read_limited_body(request: Request, max_bytes: int) -> bytes:
@@ -42,7 +41,6 @@ async def _read_limited_body(request: Request, max_bytes: int) -> bytes:
 
 def _looks_like_jpeg(data: bytes) -> bool:
     return len(data) >= 4 and data[0] == 0xFF and data[1] == 0xD8
-
 
 
 @app.get("/health")
@@ -76,12 +74,27 @@ async def get_job(
 ) -> dict[str, object]:
     job = await registry.get(job_id)
     if job is None:
-        raise HTTPException(status_code=404, detail="未找到任务")
+        raise HTTPException(status_code=404, detail="Job not found")
     return {
         "status": job.status,
         "pages": len(job.pages),
         "error": job.error,
     }
+
+
+@app.get("/jobs/{job_id}/image.jpg")
+async def get_job_image(
+    job_id: str,
+    _: None = Depends(require_api_token),
+) -> Response:
+    job = await registry.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return Response(
+        content=job.image_jpeg,
+        media_type="image/jpeg",
+        headers={"Content-Disposition": f'inline; filename="{job_id}.jpg"'},
+    )
 
 
 @app.get("/jobs/{job_id}/pages/{index}")
@@ -92,14 +105,14 @@ async def get_page(
 ) -> Response:
     job = await registry.get(job_id)
     if job is None:
-        raise HTTPException(status_code=404, detail="未找到任务")
+        raise HTTPException(status_code=404, detail="Job not found")
     if job.status != "ready":
-        raise HTTPException(status_code=409, detail="任务尚未就绪")
+        raise HTTPException(status_code=409, detail="Job is not ready")
     if index < 0 or index >= len(job.pages):
-        raise HTTPException(status_code=404, detail="未找到页面")
+        raise HTTPException(status_code=404, detail="Page not found")
     page = job.pages[index]
     if len(page) != PAGE_BYTES:
-        raise HTTPException(status_code=500, detail="页面大小无效")
+        raise HTTPException(status_code=500, detail="Invalid page size")
     return Response(content=page, media_type="application/octet-stream")
 
 
@@ -110,13 +123,11 @@ async def delete_job(
 ) -> dict[str, str]:
     cancelled = await registry.cancel(job_id)
     if not cancelled:
-        raise HTTPException(status_code=404, detail="未找到任务")
+        raise HTTPException(status_code=404, detail="Job not found")
     return {"job_id": job_id, "status": "cancelled"}
 
 
 async def _enqueue_job(job_id: str, image_jpeg: bytes) -> None:
-    import asyncio
-
     global _job_queue, _worker_task
     if _job_queue is None:
         _job_queue = asyncio.Queue()
@@ -126,8 +137,6 @@ async def _enqueue_job(job_id: str, image_jpeg: bytes) -> None:
 
 
 async def _worker_loop() -> None:
-    import asyncio
-
     while True:
         job_id, image_jpeg = await _job_queue.get()
         task = None

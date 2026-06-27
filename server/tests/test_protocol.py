@@ -86,6 +86,29 @@ def test_delete_job_cancels_or_removes_job(monkeypatch):
     assert deleted.json()["status"] in {"cancelled", "deleted"}
 
 
+def test_job_image_endpoint_returns_uploaded_jpeg(monkeypatch):
+    async def fake_answer_question(image_jpeg: bytes) -> str:
+        return "answer"
+
+    monkeypatch.setattr("app.main.answer_question", fake_answer_question)
+    _mock_render(monkeypatch)
+    client = TestClient(app)
+    image_jpeg = _fixture_jpeg("white")
+
+    created = client.post(
+        "/jobs",
+        content=image_jpeg,
+        headers={"Content-Type": "image/jpeg"},
+    )
+    job_id = created.json()["job_id"]
+
+    image_response = client.get(f"/jobs/{job_id}/image.jpg")
+
+    assert image_response.status_code == 200
+    assert image_response.headers["content-type"] == "image/jpeg"
+    assert image_response.content == image_jpeg
+
+
 def test_rejects_non_jpeg_upload():
     client = TestClient(app)
 
