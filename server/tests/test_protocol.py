@@ -136,7 +136,7 @@ def test_rejects_jpeg_content_type_with_non_jpeg_body():
 def test_health_does_not_require_api_token(monkeypatch):
     monkeypatch.setattr(
         "app.main.get_settings",
-        lambda: SimpleNamespace(max_upload_bytes=2_000_000, max_pages=20, api_token="secret"),
+        lambda: SimpleNamespace(max_pages=20, api_token="secret"),
     )
     client = TestClient(app)
 
@@ -148,7 +148,7 @@ def test_health_does_not_require_api_token(monkeypatch):
 def test_job_routes_require_api_token_when_configured(monkeypatch):
     monkeypatch.setattr(
         "app.main.get_settings",
-        lambda: SimpleNamespace(max_upload_bytes=2_000_000, max_pages=20, api_token="secret"),
+        lambda: SimpleNamespace(max_pages=20, api_token="secret"),
     )
     client = TestClient(app)
 
@@ -161,20 +161,24 @@ def test_job_routes_require_api_token_when_configured(monkeypatch):
     assert accepted.status_code == 404
 
 
-def test_rejects_upload_larger_than_configured_limit(monkeypatch):
-    monkeypatch.setattr(
-        "app.main.get_settings",
-        lambda: SimpleNamespace(max_upload_bytes=4, max_pages=20),
-    )
+def test_accepts_jpeg_without_server_size_limit(monkeypatch):
+    async def fake_answer_question(image_jpeg: bytes) -> str:
+        assert image_jpeg.startswith(b"\xff\xd8")
+        return "answer"
+
+    monkeypatch.setattr("app.main.answer_question", fake_answer_question)
+    _mock_render(monkeypatch)
     client = TestClient(app)
+    payload = _fixture_jpeg() + (b"\0" * 128_000)
 
     response = client.post(
         "/jobs",
-        content=_fixture_jpeg(),
+        content=payload,
         headers={"Content-Type": "image/jpeg"},
     )
 
-    assert response.status_code == 413
+    assert response.status_code == 200
+    assert response.json()["status"] == "queued"
 
 
 def test_cancelling_processing_job_does_not_stall_queued_job(monkeypatch):

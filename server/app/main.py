@@ -28,13 +28,9 @@ def require_api_token(
         raise HTTPException(status_code=401, detail="Missing or invalid device token")
 
 
-async def _read_limited_body(request: Request, max_bytes: int) -> bytes:
+async def _read_body(request: Request) -> bytes:
     chunks: list[bytes] = []
-    total = 0
     async for chunk in request.stream():
-        total += len(chunk)
-        if total > max_bytes:
-            raise HTTPException(status_code=413, detail="Upload body is too large")
         chunks.append(chunk)
     return b"".join(chunks)
 
@@ -53,12 +49,11 @@ async def create_job(
     request: Request,
     _: None = Depends(require_api_token),
 ) -> dict[str, str]:
-    settings = get_settings()
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     if content_type != "image/jpeg":
         raise HTTPException(status_code=415, detail="Upload must be image/jpeg")
 
-    image_jpeg = await _read_limited_body(request, settings.max_upload_bytes)
+    image_jpeg = await _read_body(request)
     if not _looks_like_jpeg(image_jpeg):
         raise HTTPException(status_code=415, detail="Upload body must be JPEG")
 

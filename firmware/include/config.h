@@ -15,5 +15,5 @@
 constexpr unsigned long BOOT_SPLASH_MS = 1500;
 constexpr unsigned long JOB_POLL_MS = 1500;
 constexpr float LOW_BATTERY_VOLTS = 3.3f;
-constexpr size_t FJKER_MAX_UPLOAD_BYTES = 2000000;
-constexpr size_t FJKER_MAX_RAW_IMAGE_BYTES = FJKER_MAX_UPLOAD_BYTES;
+constexpr size_t FJKER_MAX_UPLOAD_BYTES = 6000000;
+constexpr size_t FJKER_MAX_JPEG_BYTES = FJKER_MAX_UPLOAD_BYTES;

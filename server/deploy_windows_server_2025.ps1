@@ -9,7 +9,6 @@ param(
     [string]$ApiToken = "",
     [string]$QwenModel = "qwen3.7-plus",
     [int]$MaxPages = 20,
-    [int]$MaxUploadBytes = 6000000,
     [string]$TaskName = "FJ-ker Server",
     [string[]]$AllowedRemoteAddress = @("Any"),
     [string]$PythonInstallerUrl = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe",
@@ -279,7 +278,6 @@ FJKER_API_TOKEN=$ApiToken
 SERVER_HOST=$BindHost
 SERVER_PORT=$Port
 MAX_PAGES=$MaxPages
-MAX_UPLOAD_BYTES=$MaxUploadBytes
 "@
 Write-Utf8NoBom -Path $envPath -Content $envContent
 Protect-SecretFile -Path $envPath

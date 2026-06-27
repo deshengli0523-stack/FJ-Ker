@@ -9,7 +9,6 @@ API_TOKEN=""
 DASHSCOPE_API_KEY=""
 QWEN_MODEL="qwen3.7-plus"
 MAX_PAGES="20"
-MAX_UPLOAD_BYTES="6000000"
 SERVICE_USER="fjker"
 OPEN_FIREWALL="0"
 ACCEPT_PUBLIC_HTTP_RISK="0"
@@ -33,7 +32,6 @@ Options:
   --public-base-url URL                     Example: http://115.28.131.113:8080
   --qwen-model MODEL                        Default: qwen3.7-plus
   --max-pages N                             Default: 20
-  --max-upload-bytes N                      Default: 6000000
   --service-user USER                       Default: fjker
   --open-firewall                           Add a UFW allow rule for PORT/tcp when ufw exists.
   --accept-public-http-risk                 Required with --open-firewall.
@@ -74,10 +72,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --max-pages)
       MAX_PAGES="${2:-}"
-      shift 2
-      ;;
-    --max-upload-bytes)
-      MAX_UPLOAD_BYTES="${2:-}"
       shift 2
       ;;
     --service-user)
@@ -254,7 +248,6 @@ FJKER_API_TOKEN=${API_TOKEN}
 SERVER_HOST=${BIND_HOST}
 SERVER_PORT=${PORT}
 MAX_PAGES=${MAX_PAGES}
-MAX_UPLOAD_BYTES=${MAX_UPLOAD_BYTES}
 EOF
 chown "$SERVICE_USER:$SERVICE_USER" "$ENV_PATH"
 chmod 600 "$ENV_PATH"

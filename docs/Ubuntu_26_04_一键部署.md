@@ -194,7 +194,6 @@ FJKER_API_TOKEN=设备访问 Token
 SERVER_HOST=0.0.0.0
 SERVER_PORT=8080
 MAX_PAGES=20
-MAX_UPLOAD_BYTES=2000000
 ```
 
 不要截图或公开 `.env`，里面有 Qwen API Key 和设备 Token。
