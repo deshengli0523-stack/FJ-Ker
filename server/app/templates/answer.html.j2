@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <style>{{ css }}</style>
-  {% if katex_css %}<style>{{ katex_css }}</style>{% endif %}
+  <style>{{ css | safe }}</style>
+  {% if katex_css %}<style>{{ katex_css | safe }}</style>{% endif %}
 </head>
 <body>
   <main>
@@ -13,9 +13,9 @@
     window.__FJKER_MATH_READY = false;
     window.__FJKER_MATH_DISABLED = false;
   </script>
-  {% if katex_js %}<script>{{ katex_js }}</script>{% endif %}
+  {% if katex_js %}<script>{{ katex_js | safe }}</script>{% endif %}
   {% if katex_js and katex_auto_render_js %}
-  <script>{{ katex_auto_render_js }}</script>
+  <script>{{ katex_auto_render_js | safe }}</script>
   <script>
     try {
       renderMathInElement(document.body, {
@@ -56,7 +56,7 @@
     };
   </script>
   {% if mathjax_js %}
-  <script>{{ mathjax_js }}</script>
+  <script>{{ mathjax_js | safe }}</script>
   {% else %}
   <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" onerror="window.__FJKER_MATH_ERROR = 'MathJax CDN failed to load'; window.__FJKER_MATH_DISABLED = true;"></script>
   {% endif %}

@@ -114,6 +114,23 @@ def test_render_html_marks_mathjax_timeout_as_disabled():
     assert "window.__FJKER_MATH_DISABLED = true" in html
 
 
+def test_render_html_does_not_escape_inline_mathjax_asset(monkeypatch):
+    import app.render as render_module
+
+    def fake_optional_text(path):
+        if path.name == "tex-svg.js":
+            return 'window.__MATHJAX_TEST = "ok" && 1 < 2;'
+        return None
+
+    monkeypatch.setattr(render_module, "_optional_text", fake_optional_text)
+
+    html = render_module._render_html("formula: $x^2$")
+
+    assert 'window.__MATHJAX_TEST = "ok" && 1 < 2;' in html
+    assert "&quot;ok&quot;" not in html
+    assert "1 &lt; 2" not in html
+
+
 def test_render_with_playwright_waits_for_dom_not_networkidle(monkeypatch):
     import sys
     import types
