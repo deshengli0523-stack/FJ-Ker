@@ -1,4 +1,5 @@
 import html
+import logging
 import math
 import re
 import tempfile
@@ -25,6 +26,7 @@ PAGE_H = 168
 ROW_STRIDE = 48
 PAGE_BYTES = PAGE_H * ROW_STRIDE
 THRESHOLD = 128
+LOGGER = logging.getLogger(__name__)
 _MATH_TOKEN = "FJKERMATH"
 _PAGE_CUT_SEARCH_ROWS = 48
 _FORMULA_CHARS = set(
@@ -248,6 +250,7 @@ def _render_with_playwright(markdown_text: str) -> Image.Image | None:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
+        LOGGER.warning("Playwright is not installed; using Pillow fallback renderer.")
         return None
 
     html_text = _render_html(markdown_text)
@@ -272,12 +275,12 @@ def _render_with_playwright(markdown_text: str) -> Image.Image | None:
                 page.screenshot(path=str(out_path), full_page=True)
                 browser.close()
             return Image.open(out_path).convert("L")
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning("Playwright rendering failed; using Pillow fallback renderer: %s", exc)
         return None
 
 
 def _render_html(markdown_text: str) -> str:
-    body = _markdown_to_html(markdown_text)
     templates = Path(__file__).parent / "templates"
     css = (templates / "style.css").read_text(encoding="utf-8")
     font_url = _local_font_url()
@@ -287,6 +290,8 @@ def _render_html(markdown_text: str) -> str:
     katex_js = _optional_text(templates / "katex" / "katex.min.js")
     katex_auto_render_js = _optional_text(templates / "katex" / "auto-render.min.js")
     mathjax_js = _optional_text(templates / "mathjax" / "tex-svg.js")
+    use_browser_math = bool(katex_js and katex_auto_render_js) or bool(mathjax_js)
+    body = _markdown_to_html(markdown_text, use_browser_math=use_browser_math)
     if Environment is None:
         return f"<!doctype html><html><head><style>{css}</style></head><body><main>{body}</main></body></html>"
 
@@ -302,6 +307,7 @@ def _render_html(markdown_text: str) -> str:
         katex_js=katex_js,
         katex_auto_render_js=katex_auto_render_js,
         mathjax_js=mathjax_js,
+        browser_math_enabled=use_browser_math,
     )
 
 
@@ -311,9 +317,16 @@ def _optional_text(path: Path) -> str:
     return ""
 
 
-def _markdown_to_html(markdown_text: str) -> str:
-    markdown_text, math_fragments = _extract_math_fragments(markdown_text)
-    markdown_text = _extract_auto_physics_fragments(markdown_text, math_fragments)
+def _markdown_to_html(markdown_text: str, use_browser_math: bool = True) -> str:
+    markdown_text, math_fragments = _extract_math_fragments(
+        markdown_text,
+        use_browser_math=use_browser_math,
+    )
+    markdown_text = _extract_auto_physics_fragments(
+        markdown_text,
+        math_fragments,
+        use_browser_math=use_browser_math,
+    )
     if markdown_lib is not None:
         body = markdown_lib.markdown(markdown_text, extensions=["extra"])
         body = _render_chemistry_html(body)
@@ -325,7 +338,7 @@ def _markdown_to_html(markdown_text: str) -> str:
     return _restore_math_fragments(body, math_fragments)
 
 
-def _extract_math_fragments(markdown_text: str) -> tuple[str, list[str]]:
+def _extract_math_fragments(markdown_text: str, use_browser_math: bool = True) -> tuple[str, list[str]]:
     fragments: list[str] = []
     out: list[str] = []
     i = 0
@@ -333,25 +346,53 @@ def _extract_math_fragments(markdown_text: str) -> tuple[str, list[str]]:
         if markdown_text.startswith("$$", i):
             end = markdown_text.find("$$", i + 2)
             if end != -1:
-                out.append(_math_placeholder(fragments, markdown_text[i + 2 : end], display=True))
+                out.append(
+                    _math_placeholder(
+                        fragments,
+                        markdown_text[i + 2 : end],
+                        display=True,
+                        use_browser_math=use_browser_math,
+                    )
+                )
                 i = end + 2
                 continue
         if markdown_text.startswith("\\[", i):
             end = markdown_text.find("\\]", i + 2)
             if end != -1:
-                out.append(_math_placeholder(fragments, markdown_text[i + 2 : end], display=True))
+                out.append(
+                    _math_placeholder(
+                        fragments,
+                        markdown_text[i + 2 : end],
+                        display=True,
+                        use_browser_math=use_browser_math,
+                    )
+                )
                 i = end + 2
                 continue
         if markdown_text.startswith("\\(", i):
             end = markdown_text.find("\\)", i + 2)
             if end != -1:
-                out.append(_math_placeholder(fragments, markdown_text[i + 2 : end], display=False))
+                out.append(
+                    _math_placeholder(
+                        fragments,
+                        markdown_text[i + 2 : end],
+                        display=False,
+                        use_browser_math=use_browser_math,
+                    )
+                )
                 i = end + 2
                 continue
         if markdown_text[i] == "$" and not markdown_text.startswith("$$", i):
             end = _find_inline_math_end(markdown_text, i + 1)
             if end != -1:
-                out.append(_math_placeholder(fragments, markdown_text[i + 1 : end], display=False))
+                out.append(
+                    _math_placeholder(
+                        fragments,
+                        markdown_text[i + 1 : end],
+                        display=False,
+                        use_browser_math=use_browser_math,
+                    )
+                )
                 i = end + 1
                 continue
         out.append(markdown_text[i])
@@ -373,7 +414,11 @@ def _find_inline_math_end(text: str, start: int) -> int:
     return -1
 
 
-def _extract_auto_physics_fragments(markdown_text: str, fragments: list[str]) -> str:
+def _extract_auto_physics_fragments(
+    markdown_text: str,
+    fragments: list[str],
+    use_browser_math: bool = True,
+) -> str:
     out: list[str] = []
     i = 0
     while i < len(markdown_text):
@@ -383,7 +428,14 @@ def _extract_auto_physics_fragments(markdown_text: str, fragments: list[str]) ->
                 end += 1
             candidate = markdown_text[i:end].strip()
             if _looks_like_physics_formula(candidate):
-                out.append(_math_placeholder(fragments, _normalize_unicode_math(candidate), display=False))
+                out.append(
+                    _math_placeholder(
+                        fragments,
+                        _normalize_unicode_math(candidate),
+                        display=False,
+                        use_browser_math=use_browser_math,
+                    )
+                )
                 i = end
                 continue
         out.append(markdown_text[i])
@@ -411,9 +463,17 @@ def _normalize_unicode_math(source: str) -> str:
     return "".join(_UNICODE_MATH_TO_LATEX.get(ch, ch) for ch in source.strip())
 
 
-def _math_placeholder(fragments: list[str], latex: str, display: bool) -> str:
+def _math_placeholder(
+    fragments: list[str],
+    latex: str,
+    display: bool,
+    use_browser_math: bool = True,
+) -> str:
     index = len(fragments)
-    fragments.append(_math_engine_fragment(latex, display=display))
+    if use_browser_math:
+        fragments.append(_math_engine_fragment(latex, display=display))
+    else:
+        fragments.append(_render_latex_fragment(latex, display=display))
     return f"@@{_MATH_TOKEN}{index}@@"
 
 
@@ -642,18 +702,45 @@ def _chemical_formula_to_html(formula: str) -> str:
 
 
 def _render_with_pillow(markdown_text: str) -> Image.Image:
-    lines = _wrap_text(_plain_text(markdown_text), max_chars=12)
+    font = _load_font(16)
+    lines = _wrap_text_to_width(_plain_text(markdown_text), font, max_width=PAGE_W - 8)
     line_height = 20
     height = max(PAGE_H, 16 + len(lines) * line_height)
     image = Image.new("L", (PAGE_W, height), 255)
     draw = ImageDraw.Draw(image)
-    font = _load_font(16)
 
     y = 8
     for line in lines:
         draw.text((4, y), line, fill=0, font=font)
         y += line_height
     return image
+
+
+def _wrap_text_to_width(text: str, font: ImageFont.ImageFont, max_width: int) -> list[str]:
+    lines: list[str] = []
+    for raw_line in text.splitlines():
+        raw_line = raw_line.strip()
+        if not raw_line:
+            lines.append("")
+            continue
+        current = ""
+        for ch in raw_line:
+            candidate = current + ch
+            if current and _text_width(font, candidate) > max_width:
+                lines.append(current)
+                current = ch
+            else:
+                current = candidate
+        if current:
+            lines.append(current)
+    return lines or [""]
+
+
+def _text_width(font: ImageFont.ImageFont, text: str) -> float:
+    if hasattr(font, "getlength"):
+        return float(font.getlength(text))
+    bbox = font.getbbox(text)
+    return float(bbox[2] - bbox[0])
 
 
 def _plain_text(markdown_text: str) -> str:

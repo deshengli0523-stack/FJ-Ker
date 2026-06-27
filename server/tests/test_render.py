@@ -4,7 +4,9 @@ from app.render import (
     PAGE_W,
     ROW_STRIDE,
     _font_candidates,
+    _markdown_to_html,
     _render_html,
+    _render_with_pillow,
     _slice_and_pack,
     pack_1bpp,
     _plain_text,
@@ -74,10 +76,18 @@ def test_slice_and_pack_does_not_cut_visible_rows_at_page_break():
     assert any(_packed_row_has_black(pages[1], y) for y in range(0, 16))
 
 
-def test_render_html_delegates_latex_to_browser_math_engine():
+def test_render_html_uses_local_math_when_browser_math_assets_are_missing():
     html = _render_html("分数：$\\frac{1}{2}$\n\n积分：$$\\int_0^1 x^2 dx$$")
 
-    assert "window.MathJax" in html
+    assert '<span class="math-fraction">' in html
+    assert "\\(\\frac{1}{2}\\)" not in html
+    assert "cdn.jsdelivr.net" not in html
+    assert "window.__FJKER_MATH_DISABLED = true" in html
+
+
+def test_markdown_to_html_can_delegate_latex_to_browser_math_engine():
+    html = _markdown_to_html("fraction: $\\frac{1}{2}$\n\nintegral: $$\\int_0^1 x^2 dx$$")
+
     assert "\\(\\frac{1}{2}\\)" in html
     assert "\\[\\int_0^1 x^2 dx\\]" in html
     assert '<span class="math-fraction">' not in html
@@ -86,28 +96,26 @@ def test_render_html_delegates_latex_to_browser_math_engine():
 def test_render_html_auto_formats_common_physics_formulas():
     html = _render_html("速度：v_0=at，能量：E=mc^2，位移：s=v_0t+\\frac{1}{2}at^2。")
 
-    assert "\\(v_0=at\\)" in html
-    assert "\\(E=mc^2\\)" in html
-    assert "\\(s=v_0t+\\frac{1}{2}at^2\\)" in html
-    assert '<span class="math-fraction">' not in html
+    assert "<sub>0</sub>" in html
+    assert "<sup>2</sup>" in html
+    assert '<span class="math-fraction">' in html
 
 
 def test_render_html_auto_formats_scientific_notation_with_unicode_symbols():
     html = _render_html("原子数密度：3 × 6.022 × 10^23 / 55.9 × 10^-3 ≈ 8.47 × 10^28 m^-3。磁矩 μ：")
 
-    assert "\\(3 \\times 6.022 \\times 10^23 / 55.9 \\times 10^-3 \\approx 8.47 \\times 10^28 m^-3\\)" in html
-    assert "\\(\\mu\\)" in html
-    assert "×" not in html
-    assert "≈" not in html
-    assert "μ" not in html
+    assert "\\times" not in html
+    assert "\\mu" not in html
+    assert "<sup>23</sup>" in html
+    assert "<sup>-3</sup>" in html
+    assert "<sup>28</sup>" in html
     assert '<span class="math-fraction">' not in html
 
 
 def test_render_html_formats_vector_physics_commands():
     html = _render_html("受力：$\\vec{F}=m\\vec{a}$")
 
-    assert "\\(\\vec{F}=m\\vec{a}\\)" in html
-    assert '<span class="math-vector">' not in html
+    assert '<span class="math-vector">' in html
     assert "vecF" not in html
 
 
@@ -126,16 +134,33 @@ def test_font_candidates_include_ubuntu_cjk_fonts():
     assert "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc" in candidates
 
 
+def test_pillow_fallback_uses_full_page_width():
+    image = _render_with_pillow(
+        "This fallback line should use the whole 384 pixel display width instead of wrapping after 12 chars."
+    )
+    gray = image.convert("L")
+
+    right_half_has_ink = any(
+        gray.getpixel((x, y)) < 128
+        for y in range(min(PAGE_H, gray.height))
+        for x in range(PAGE_W // 2, PAGE_W - 4)
+    )
+
+    assert right_half_has_ink
+
+
 def test_render_html_normalizes_ion_charge_symbols():
     html = _render_html(
         "矿泉水中 K⁺、Na⁺、Cl⁻、Na+、Cl-、Na^+、Cl^- 较多，"
         "$\\mathrm{Na}^+$、$\\text{Cl}^-$、$\\ce{Ca^{2+}}$、$\\ce{Mg^2+}$ 也可能存在。"
     )
 
-    assert "\\(\\mathrm{Na}^+\\)" in html
-    assert "\\(\\text{Cl}^-\\)" in html
-    assert "\\(\\ce{Ca^{2+}}\\)" in html
-    assert "\\(\\ce{Mg^2+}\\)" in html
+    assert "\\(\\mathrm{Na}^+\\)" not in html
+    assert "\\(\\text{Cl}^-\\)" not in html
+    assert "\\(\\ce{Ca^{2+}}\\)" not in html
+    assert "\\(\\ce{Mg^2+}\\)" not in html
+    assert "Ca<sup>2+</sup>" in html
+    assert "Mg<sup>2+</sup>" in html
     assert "chem-formula" in html
     assert ".chem-formula sup" in html
     assert "K<sup>+</sup>" in html
