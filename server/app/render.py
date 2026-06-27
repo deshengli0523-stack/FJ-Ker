@@ -3,7 +3,6 @@ import logging
 import math
 import os
 import re
-import shutil
 import tempfile
 from pathlib import Path
 from typing import Iterable
@@ -334,9 +333,6 @@ def _chrome_launch_options() -> dict[str, object]:
         "env": _chrome_env(),
     }
     executable_path = os.environ.get("FJKER_CHROME_EXECUTABLE", "").strip()
-    if not executable_path:
-        executable_path = _find_google_chrome_stable()
-
     if executable_path:
         options["executable_path"] = executable_path
     else:
@@ -347,26 +343,9 @@ def _chrome_launch_options() -> dict[str, object]:
     return options
 
 
-def _find_google_chrome_stable() -> str:
-    for candidate in (
-        shutil.which("google-chrome-stable"),
-        shutil.which("google-chrome"),
-        "/usr/bin/google-chrome-stable",
-        "/usr/bin/google-chrome",
-    ):
-        if candidate and Path(candidate).exists():
-            return candidate
-    return ""
-
-
 def _chrome_args() -> list[str]:
-    crash_dir = _chrome_runtime_root() / "crashpad"
-    crash_dir.mkdir(parents=True, exist_ok=True)
     args = [
         "--disable-dev-shm-usage",
-        "--disable-crash-reporter",
-        "--disable-crashpad",
-        f"--crash-dumps-dir={crash_dir}",
     ]
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         args.append("--no-sandbox")
@@ -379,14 +358,17 @@ def _chrome_env() -> dict[str, str]:
     config = root / "config"
     cache = root / "cache"
     data = root / "data"
-    for path in (home, config, cache, data / "applications"):
+    runtime = root / "runtime"
+    for path in (home, config, cache, data / "applications", runtime):
         path.mkdir(parents=True, exist_ok=True)
+    runtime.chmod(0o700)
 
     env = {key: str(value) for key, value in os.environ.items()}
     env["HOME"] = str(home)
     env["XDG_CONFIG_HOME"] = str(config)
     env["XDG_CACHE_HOME"] = str(cache)
     env["XDG_DATA_HOME"] = str(data)
+    env["XDG_RUNTIME_DIR"] = str(runtime)
     return env
 
 

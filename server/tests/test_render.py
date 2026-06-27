@@ -229,6 +229,16 @@ def test_chrome_launch_options_use_google_chrome_executable(monkeypatch):
     assert "channel" not in options
 
 
+def test_chrome_launch_options_default_to_system_chrome_channel(monkeypatch):
+    monkeypatch.delenv("FJKER_CHROME_EXECUTABLE", raising=False)
+    monkeypatch.delenv("FJKER_CHROME_CHANNEL", raising=False)
+
+    options = _chrome_launch_options()
+
+    assert options["channel"] == "chrome"
+    assert "executable_path" not in options
+
+
 def test_chrome_launch_options_use_writable_runtime_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("FJKER_CHROME_RUNTIME_DIR", str(tmp_path))
 
@@ -239,9 +249,11 @@ def test_chrome_launch_options_use_writable_runtime_dirs(tmp_path, monkeypatch):
     assert env["XDG_CONFIG_HOME"] == str(tmp_path / "config")
     assert env["XDG_CACHE_HOME"] == str(tmp_path / "cache")
     assert env["XDG_DATA_HOME"] == str(tmp_path / "data")
+    assert env["XDG_RUNTIME_DIR"] == str(tmp_path / "runtime")
     assert (tmp_path / "data" / "applications").is_dir()
-    assert (tmp_path / "crashpad").is_dir()
-    assert f"--crash-dumps-dir={tmp_path / 'crashpad'}" in options["args"]
+    assert (tmp_path / "runtime").is_dir()
+    assert "--disable-crashpad" not in options["args"]
+    assert not any(str(arg).startswith("--crash-dumps-dir=") for arg in options["args"])
 
 
 def test_render_html_auto_formats_common_physics_formulas():
