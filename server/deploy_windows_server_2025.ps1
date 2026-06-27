@@ -9,7 +9,7 @@ param(
     [string]$ApiToken = "",
     [string]$QwenModel = "qwen3.7-plus",
     [int]$MaxPages = 20,
-    [int]$MaxUploadBytes = 2000000,
+    [int]$MaxUploadBytes = 6000000,
     [string]$TaskName = "FJ-ker Server",
     [string[]]$AllowedRemoteAddress = @("Any"),
     [string]$PythonInstallerUrl = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe",

@@ -1,10 +1,8 @@
 import asyncio
 import secrets
-from io import BytesIO
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import Response
-from PIL import Image
 
 from .jobs import registry
 from .llm_qwen import answer_question
@@ -31,18 +29,6 @@ def require_api_token(
 
 
 
-def _parse_positive_int(value: str | None, name: str) -> int:
-    if value is None:
-        raise HTTPException(status_code=400, detail=f"Missing X-FJ-KER-{name.upper()} header")
-    try:
-        parsed = int(value)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid {name}") from exc
-    if parsed <= 0:
-        raise HTTPException(status_code=400, detail=f"Invalid {name}")
-    return parsed
-
-
 async def _read_limited_body(request: Request, max_bytes: int) -> bytes:
     chunks: list[bytes] = []
     total = 0
@@ -54,43 +40,9 @@ async def _read_limited_body(request: Request, max_bytes: int) -> bytes:
     return b"".join(chunks)
 
 
-def _rgb565_to_jpeg(raw: bytes, width: int, height: int, byte_order: str) -> bytes:
-    if byte_order not in {"be", "le"}:
-        raise HTTPException(status_code=400, detail="Invalid RGB565 byte order")
-    expected = width * height * 2
-    if len(raw) != expected:
-        raise HTTPException(status_code=400, detail="RGB565 payload size does not match dimensions")
+def _looks_like_jpeg(data: bytes) -> bool:
+    return len(data) >= 4 and data[0] == 0xFF and data[1] == 0xD8
 
-    rgb = bytearray(width * height * 3)
-    src = 0
-    dst = 0
-    if byte_order == "be":
-        for _ in range(width * height):
-            value = (raw[src] << 8) | raw[src + 1]
-            src += 2
-            r = (value >> 11) & 0x1F
-            g = (value >> 5) & 0x3F
-            b = value & 0x1F
-            rgb[dst] = (r << 3) | (r >> 2)
-            rgb[dst + 1] = (g << 2) | (g >> 4)
-            rgb[dst + 2] = (b << 3) | (b >> 2)
-            dst += 3
-    else:
-        for _ in range(width * height):
-            value = raw[src] | (raw[src + 1] << 8)
-            src += 2
-            r = (value >> 11) & 0x1F
-            g = (value >> 5) & 0x3F
-            b = value & 0x1F
-            rgb[dst] = (r << 3) | (r >> 2)
-            rgb[dst + 1] = (g << 2) | (g >> 4)
-            rgb[dst + 2] = (b << 3) | (b >> 2)
-            dst += 3
-
-    image = Image.frombytes("RGB", (width, height), bytes(rgb))
-    buffer = BytesIO()
-    image.save(buffer, format="JPEG", quality=90)
-    return buffer.getvalue()
 
 
 @app.get("/health")
@@ -105,18 +57,12 @@ async def create_job(
 ) -> dict[str, str]:
     settings = get_settings()
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-    if content_type != "application/octet-stream":
-        raise HTTPException(status_code=415, detail="Upload must be raw RGB565 octet-stream")
+    if content_type != "image/jpeg":
+        raise HTTPException(status_code=415, detail="Upload must be image/jpeg")
 
-    image_format = request.headers.get("x-fj-ker-image-format", "").strip().lower()
-    if image_format != "rgb565":
-        raise HTTPException(status_code=415, detail="Upload image format must be rgb565")
-
-    width = _parse_positive_int(request.headers.get("x-fj-ker-width"), "width")
-    height = _parse_positive_int(request.headers.get("x-fj-ker-height"), "height")
-    byte_order = request.headers.get("x-fj-ker-byte-order", "be").strip().lower()
-    raw = await _read_limited_body(request, settings.max_upload_bytes)
-    image_jpeg = _rgb565_to_jpeg(raw, width, height, byte_order)
+    image_jpeg = await _read_limited_body(request, settings.max_upload_bytes)
+    if not _looks_like_jpeg(image_jpeg):
+        raise HTTPException(status_code=415, detail="Upload body must be JPEG")
 
     job = await registry.create(image_jpeg)
     await _enqueue_job(job.job_id, image_jpeg)

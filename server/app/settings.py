@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     server_host: str = Field(default="0.0.0.0", alias="SERVER_HOST")
     server_port: int = Field(default=8080, alias="SERVER_PORT")
     max_pages: int = Field(default=20, alias="MAX_PAGES")
-    max_upload_bytes: int = Field(default=2_000_000, alias="MAX_UPLOAD_BYTES")
+    max_upload_bytes: int = Field(default=6_000_000, alias="MAX_UPLOAD_BYTES")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

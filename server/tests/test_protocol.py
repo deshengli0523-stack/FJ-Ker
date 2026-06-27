@@ -11,29 +11,11 @@ from app.render import PAGE_BYTES
 from app.main import app
 
 
-def _fixture_jpeg() -> bytes:
-    image = Image.new("RGB", (32, 32), "white")
+def _fixture_jpeg(color: str = "white") -> bytes:
+    image = Image.new("RGB", (32, 32), color)
     buffer = BytesIO()
     image.save(buffer, format="JPEG")
     return buffer.getvalue()
-
-
-def _fixture_rgb565(width: int = 32, height: int = 32, color: tuple[int, int, int] = (255, 255, 255)) -> bytes:
-    r, g, b = color
-    value = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
-    pixel = bytes([(value >> 8) & 0xFF, value & 0xFF])
-    return pixel * (width * height)
-
-
-def _raw_headers(width: int = 32, height: int = 32) -> dict[str, str]:
-    return {
-        "Content-Type": "application/octet-stream",
-        "X-FJ-KER-IMAGE-FORMAT": "rgb565",
-        "X-FJ-KER-WIDTH": str(width),
-        "X-FJ-KER-HEIGHT": str(height),
-        "X-FJ-KER-BYTE-ORDER": "be",
-    }
-
 
 
 def _mock_render(monkeypatch):
@@ -54,8 +36,8 @@ def test_job_protocol_returns_ready_page(monkeypatch):
 
     response = client.post(
         "/jobs",
-        content=_fixture_rgb565(),
-        headers=_raw_headers(),
+        content=_fixture_jpeg(),
+        headers={"Content-Type": "image/jpeg"},
     )
 
     assert response.status_code == 200
@@ -93,8 +75,8 @@ def test_delete_job_cancels_or_removes_job(monkeypatch):
 
     created = client.post(
         "/jobs",
-        content=_fixture_rgb565(),
-        headers=_raw_headers(),
+        content=_fixture_jpeg(),
+        headers={"Content-Type": "image/jpeg"},
     )
     job_id = created.json()["job_id"]
 
@@ -104,13 +86,25 @@ def test_delete_job_cancels_or_removes_job(monkeypatch):
     assert deleted.json()["status"] in {"cancelled", "deleted"}
 
 
-def test_rejects_non_raw_upload():
+def test_rejects_non_jpeg_upload():
     client = TestClient(app)
 
     response = client.post(
         "/jobs",
         content=b"not an image",
         headers={"Content-Type": "text/plain"},
+    )
+
+    assert response.status_code == 415
+
+
+def test_rejects_jpeg_content_type_with_non_jpeg_body():
+    client = TestClient(app)
+
+    response = client.post(
+        "/jobs",
+        content=b"not a jpeg",
+        headers={"Content-Type": "image/jpeg"},
     )
 
     assert response.status_code == 415
@@ -153,8 +147,8 @@ def test_rejects_upload_larger_than_configured_limit(monkeypatch):
 
     response = client.post(
         "/jobs",
-        content=_fixture_rgb565(width=2, height=2),
-        headers=_raw_headers(width=2, height=2),
+        content=_fixture_jpeg(),
+        headers={"Content-Type": "image/jpeg"},
     )
 
     assert response.status_code == 413
@@ -179,8 +173,8 @@ def test_cancelling_processing_job_does_not_stall_queued_job(monkeypatch):
 
     first = client.post(
         "/jobs",
-        content=_fixture_rgb565(color=(255, 255, 255)),
-        headers=_raw_headers(),
+        content=_fixture_jpeg("white"),
+        headers={"Content-Type": "image/jpeg"},
     ).json()["job_id"]
 
     for _ in range(50):
@@ -193,8 +187,8 @@ def test_cancelling_processing_job_does_not_stall_queued_job(monkeypatch):
 
     second = client.post(
         "/jobs",
-        content=_fixture_rgb565(color=(0, 0, 0)),
-        headers=_raw_headers(),
+        content=_fixture_jpeg("black"),
+        headers={"Content-Type": "image/jpeg"},
     ).json()["job_id"]
 
     deleted = client.delete(f"/jobs/{first}")
