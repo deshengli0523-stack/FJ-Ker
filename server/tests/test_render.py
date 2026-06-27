@@ -106,6 +106,14 @@ def test_render_html_delegates_latex_to_browser_math_engine():
     assert '<span class="math-fraction">' not in html
 
 
+def test_render_html_marks_mathjax_timeout_as_disabled():
+    html = _render_html("formula: $x^2$")
+
+    assert "!window.__FJKER_MATH_READY" in html
+    assert "MathJax did not finish rendering within 12000ms" in html
+    assert "window.__FJKER_MATH_DISABLED = true" in html
+
+
 def test_render_with_playwright_waits_for_dom_not_networkidle(monkeypatch):
     import sys
     import types

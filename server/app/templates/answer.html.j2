@@ -62,7 +62,8 @@
   {% endif %}
   <script>
     window.setTimeout(function () {
-      if (!window.MathJax || !window.MathJax.startup) {
+      if (!window.__FJKER_MATH_READY) {
+        window.__FJKER_MATH_ERROR = window.__FJKER_MATH_ERROR || "MathJax did not finish rendering within 12000ms";
         window.__FJKER_MATH_DISABLED = true;
       }
     }, 12000);
